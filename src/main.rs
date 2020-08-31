@@ -18,18 +18,19 @@ use winapi::um::winuser::{GetForegroundWindow, GetWindowThreadProcessId, VK_F7};
 fn main() {
     simple_logger::init().expect("Failed to init logger");
 
-    info!("Started key clone");
-
     let mut run_hot_key = HotKey::new(1, VK_F7);
     run_hot_key.register();
 
+    info!("Key clone are ready to run. Press \"F7\" to start");
     let mut run = false;
 
     loop {
         run_hot_key.process(|activated| {
             if activated {
+                info!("Key clone started");
                 run = true;
             } else {
+                info!("Key clone stopped");
                 run = false;
             }
         });
@@ -54,22 +55,20 @@ unsafe fn process() {
 }
 
 unsafe fn find_process_name(pid: u32) -> Option<String> {
-    let handle = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    let handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
     let mut maybe_entry = MaybeUninit::<PROCESSENTRY32W>::uninit();
 
-    unsafe {
-        ptr::write(
-            &mut (*maybe_entry.as_mut_ptr()).dwSize,
-            size_of::<PROCESSENTRY32W>() as u32,
-        );
-    }
+    ptr::write(
+        &mut (*maybe_entry.as_mut_ptr()).dwSize,
+        size_of::<PROCESSENTRY32W>() as u32,
+    );
 
     let mut result = None;
 
-    if unsafe { Process32FirstW(handle, maybe_entry.as_mut_ptr()) } == TRUE {
-        while unsafe { Process32NextW(handle, maybe_entry.as_mut_ptr()) } == TRUE {
-            let entry = unsafe { maybe_entry.assume_init() };
+    if Process32FirstW(handle, maybe_entry.as_mut_ptr()) == TRUE {
+        while Process32NextW(handle, maybe_entry.as_mut_ptr()) == TRUE {
+            let entry = maybe_entry.assume_init();
 
             if entry.th32ProcessID == pid {
                 let process_name_full = &entry.szExeFile;
@@ -85,9 +84,7 @@ unsafe fn find_process_name(pid: u32) -> Option<String> {
         }
     }
 
-    unsafe {
-        CloseHandle(handle);
-    }
+    CloseHandle(handle);
 
     result
 }
