@@ -1,7 +1,7 @@
 mod hotkey;
 
 use crate::hotkey::HotKey;
-use log::{debug, info, warn};
+use log::{debug, info};
 use std::ffi::OsString;
 use std::mem::{size_of, MaybeUninit};
 use std::os::windows::ffi::OsStringExt;
@@ -9,7 +9,7 @@ use std::ptr::null_mut;
 use std::time::Duration;
 use std::{ptr, thread};
 use winapi::ctypes::c_int;
-use winapi::shared::minwindef::{BOOL, FALSE, LPARAM, LRESULT, TRUE, WPARAM};
+use winapi::shared::minwindef::{BOOL, LPARAM, LRESULT, TRUE, WPARAM};
 use winapi::shared::windef::HWND;
 use winapi::um::handleapi::CloseHandle;
 use winapi::um::tlhelp32::PROCESSENTRY32W;
@@ -80,12 +80,10 @@ unsafe extern "system" fn hook_callback(code: c_int, w_param: WPARAM, l_param: L
 
             for pid in pids {
                 if pid != main_pid {
-                    if let Some(hwnd) = find_hwnd_by_pid(pid) {
-                        debug!("Cloning key {} msg {} click to pid {}", key, w_param, pid);
+                    debug!("Cloning key {} msg {} click to pid {}", key, w_param, pid);
 
-                        if PostMessageW(hwnd, w_param as u32, key as usize, 0) == FALSE {
-                            warn!("Failed to send key clone")
-                        }
+                    for hwnd in find_hwnds_by_pid(pid).into_iter() {
+                        PostMessageW(hwnd, w_param as u32, key as usize, 0);
                     }
                 }
             }
@@ -95,8 +93,8 @@ unsafe extern "system" fn hook_callback(code: c_int, w_param: WPARAM, l_param: L
     CallNextHookEx(null_mut(), code, w_param, l_param)
 }
 
-unsafe fn find_hwnd_by_pid(pid: u32) -> Option<HWND> {
-    static mut HWND_OPT: Option<HWND> = None;
+unsafe fn find_hwnds_by_pid(pid: u32) -> Vec<HWND> {
+    static mut HWND_VEC: Vec<HWND> = Vec::new();
 
     unsafe extern "system" fn enum_callback(hwnd: HWND, l_param: LPARAM) -> BOOL {
         let mut maybe_hwnd_pid = MaybeUninit::<u32>::uninit();
@@ -106,7 +104,7 @@ unsafe fn find_hwnd_by_pid(pid: u32) -> Option<HWND> {
         let hwnd_pid = maybe_hwnd_pid.assume_init();
 
         if hwnd_pid == l_param as u32 {
-            HWND_OPT = Some(hwnd);
+            HWND_VEC.push(hwnd);
         }
 
         TRUE
@@ -114,7 +112,7 @@ unsafe fn find_hwnd_by_pid(pid: u32) -> Option<HWND> {
 
     EnumWindows(Some(enum_callback), pid as isize);
 
-    HWND_OPT
+    HWND_VEC.clone()
 }
 
 unsafe fn find_process_name(pid: u32) -> Option<String> {
