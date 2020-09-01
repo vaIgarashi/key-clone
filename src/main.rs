@@ -80,9 +80,17 @@ unsafe extern "system" fn hook_callback(code: c_int, w_param: WPARAM, l_param: L
 
             for pid in pids {
                 if pid != main_pid {
-                    debug!("Cloning key {} msg {} click to pid {}", key, w_param, pid);
+                    let hwnds = find_hwnds_by_pid(pid);
 
-                    for hwnd in find_hwnds_by_pid(pid).into_iter() {
+                    debug!(
+                        "Cloning key {} msg {} click to pid {} for {} hwnds",
+                        key,
+                        w_param,
+                        pid,
+                        hwnds.len()
+                    );
+
+                    for hwnd in hwnds.into_iter() {
                         PostMessageW(hwnd, w_param as u32, key as usize, 0);
                     }
                 }
@@ -112,7 +120,10 @@ unsafe fn find_hwnds_by_pid(pid: u32) -> Vec<HWND> {
 
     EnumWindows(Some(enum_callback), pid as isize);
 
-    HWND_VEC.clone()
+    let result = HWND_VEC.clone();
+    HWND_VEC.clear();
+
+    result
 }
 
 unsafe fn find_process_name(pid: u32) -> Option<String> {
